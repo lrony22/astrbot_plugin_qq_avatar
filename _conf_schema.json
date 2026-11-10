@@ -1,0 +1,69 @@
+{
+  "accounts": {
+    "description": "QQ 账号与头像库",
+    "type": "template_list",
+    "default": [],
+    "hint": "每个 QQ 账号添加一项。平台 ID 填已有实例（例如 onebot、grok），QQ 号填机器人自己的号码。保存后重载插件。",
+    "templates": {
+      "account": {
+        "name": "QQ 头像账号",
+        "display_item": "platform_id",
+        "items": {
+          "enabled": {
+            "description": "启用账号",
+            "type": "bool",
+            "default": true
+          },
+          "platform_id": {
+            "description": "OneBot 平台实例 ID",
+            "type": "string",
+            "default": "onebot",
+            "hint": "填写现有的平台实例 ID，不是平台类型 aiocqhttp。"
+          },
+          "qq_id": {
+            "description": "机器人 QQ 号",
+            "type": "string",
+            "default": "",
+            "hint": "用于精确选择当前账号的 OneBot 连接。"
+          },
+          "library_dir": {
+            "description": "头像库目录",
+            "type": "string",
+            "default": "",
+            "hint": "建议留空，自动使用 data/plugin_data/astrbot_plugin_qq_avatar/<QQ号>，升级插件时头像仍保留。也可自定义 AstrBot 能读取的目录，相对路径基于运行根目录。仅扫描第一层 PNG、JPG、JPEG、WebP，单张上限 5 MiB。"
+          },
+          "ai_enabled": {
+            "description": "允许 AI 自主选图更换",
+            "type": "bool",
+            "default": true,
+            "hint": "向当前账号的 AI 对话提供选图工具与自主选择提示。AI 只能从本账号头像库选图；关闭后管理员命令和定时轮换仍可用。"
+          },
+          "selection": {
+            "description": "定时和手动轮换方式",
+            "type": "string",
+            "options": ["random", "sequential"],
+            "default": "random",
+            "hint": "random：随机且避免连续重复；sequential：按文件名排序依次轮换。AI 传入文件名时按它的选择执行。"
+          },
+          "cron": {
+            "description": "定时规则（留空关闭）",
+            "type": "string",
+            "default": "",
+            "hint": "五段 Cron：分 时 日 月 星期。例如每天 09:00：0 9 * * *；每天 09:00 和 21:00：0 9,21 * * *。星期遵循 AstrBot：0/7 为周日、1 为周一。"
+          },
+          "timezone": {
+            "description": "定时时区",
+            "type": "string",
+            "default": "Asia/Shanghai"
+          },
+          "cooldown_minutes": {
+            "description": "两次成功更换的最小间隔（分钟）",
+            "type": "int",
+            "default": 60,
+            "hint": "每个账号分别计时，AI、定时和手动共用；插件重载后保留。0 表示不限制。冷却期间的定时轮换直接跳过。"
+          }
+        }
+      }
+    }
+  }
+}

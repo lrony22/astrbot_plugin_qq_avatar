@@ -1,0 +1,28 @@
+{
+  "accounts": [
+    {
+      "__template_key": "account",
+      "enabled": true,
+      "platform_id": "onebot",
+      "qq_id": "111111111",
+      "library_dir": "",
+      "ai_enabled": true,
+      "selection": "random",
+      "cron": "0 9 * * *",
+      "timezone": "Asia/Shanghai",
+      "cooldown_minutes": 60
+    },
+    {
+      "__template_key": "account",
+      "enabled": true,
+      "platform_id": "grok",
+      "qq_id": "222222222",
+      "library_dir": "",
+      "ai_enabled": true,
+      "selection": "sequential",
+      "cron": "0 21 * * *",
+      "timezone": "Asia/Shanghai",
+      "cooldown_minutes": 60
+    }
+  ]
+}
