@@ -17,6 +17,8 @@ from astrbot.core.utils.astrbot_path import (
     get_astrbot_root,
 )
 
+from .library import AvatarLibraryView
+
 PLUGIN = "astrbot_plugin_qq_avatar"
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -37,6 +39,7 @@ class QQAvatar(Star):
         self.accounts = {}
         self.state = {}
         self.lock = asyncio.Lock()
+        self.library_view = AvatarLibraryView(self)
 
     async def initialize(self):
         """Restore selections and register nonpersistent account schedules.
@@ -100,12 +103,14 @@ class QQAvatar(Star):
                     payload={"account_key": key, "source": "scheduled"},
                     persistent=False,
                 )
+            self.library_view.register()
         except Exception:
             await self.terminate()
             raise
 
     async def terminate(self):
         """Remove account schedules and drain their running callbacks."""
+        self.library_view.unregister()
         manager = self.context.cron_manager
         for job in await manager.list_jobs("basic"):
             if job.name.startswith(PLUGIN + ":"):

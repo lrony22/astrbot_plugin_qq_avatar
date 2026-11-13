@@ -1,7 +1,7 @@
 name: astrbot_plugin_qq_avatar
 display_name: QQ 头像库
 desc: AI 自主选图换头像与分账号定时轮换，复用现有 OneBot 连接
-version: v1.0.1
+version: v1.1.0
 author: lrony22
 repo: https://github.com/lrony22/astrbot_plugin_qq_avatar
 astrbot_version: ">=4.29.0"

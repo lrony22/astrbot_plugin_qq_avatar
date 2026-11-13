@@ -3,7 +3,7 @@
     "description": "QQ 账号与头像库",
     "type": "template_list",
     "default": [],
-    "hint": "每个 QQ 账号添加一项。平台 ID 填已有实例（例如 onebot、grok），QQ 号填机器人自己的号码。保存后重载插件。",
+    "hint": "每个 QQ 账号添加一项。平台 ID 填已有 OneBot 实例的 ID，QQ 号填机器人自己的号码。保存后重载插件。",
     "templates": {
       "account": {
         "name": "QQ 头像账号",
@@ -17,8 +17,8 @@
           "platform_id": {
             "description": "OneBot 平台实例 ID",
             "type": "string",
-            "default": "onebot",
-            "hint": "填写现有的平台实例 ID，不是平台类型 aiocqhttp。"
+            "default": "qq_bot_1",
+            "hint": "qq_bot_1 为示例名称，请替换为机器人管理中已有的实例 ID，不是平台类型 aiocqhttp。"
           },
           "qq_id": {
             "description": "机器人 QQ 号",

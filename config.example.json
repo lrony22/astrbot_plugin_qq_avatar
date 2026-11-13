@@ -3,7 +3,7 @@
     {
       "__template_key": "account",
       "enabled": true,
-      "platform_id": "onebot",
+      "platform_id": "qq_bot_1",
       "qq_id": "111111111",
       "library_dir": "",
       "ai_enabled": true,
@@ -15,7 +15,7 @@
     {
       "__template_key": "account",
       "enabled": true,
-      "platform_id": "grok",
+      "platform_id": "qq_bot_2",
       "qq_id": "222222222",
       "library_dir": "",
       "ai_enabled": true,

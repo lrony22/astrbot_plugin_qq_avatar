@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>头像库</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="library-app">
+      <header class="page-header">
+        <div>
+          <h1>头像库</h1>
+          <p class="subtitle">为每个 QQ 账号，准备不同的表情。</p>
+        </div>
+        <button id="upload-button" class="button primary" type="button" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-5 5 5-5 5 5M4 16v4h16v-4" /></svg>
+          上传图片
+        </button>
+        <input id="file-input" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden />
+      </header>
+
+      <section class="workspace" aria-label="账号与头像状态">
+        <div class="account-control">
+          <label for="account-select">QQ 账号</label>
+          <select id="account-select" disabled><option>正在读取账号…</option></select>
+        </div>
+        <div class="account-summary">
+          <span id="account-settings">正在连接 AstrBot…</span>
+          <span id="cooldown-status">—</span>
+        </div>
+        <button id="refresh-button" class="button subtle" type="button">刷新</button>
+      </section>
+
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+      <section id="upload-progress" class="upload-progress" aria-live="polite" hidden>
+        <p id="upload-progress-text"></p>
+        <ul id="upload-errors"></ul>
+      </section>
+
+      <section id="drop-zone" class="collection" aria-label="图片列表">
+        <div class="collection-header">
+          <h2>可选头像 <span id="image-count">0</span></h2>
+          <span class="format-hint">PNG / JPEG / WebP · 单张最大 5 MiB</span>
+        </div>
+        <div id="gallery" class="gallery"></div>
+        <div id="empty-state" class="empty-state">
+          <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="8" y="6" width="32" height="36" rx="5"/><circle cx="24" cy="20" r="7"/><path d="M14 37c2-9 18-9 20 0"/></svg>
+          <h3 id="empty-title">正在读取头像库</h3>
+          <p id="empty-description">请稍候。</p>
+          <button id="empty-upload" class="button primary" type="button" hidden>上传第一张头像</button>
+        </div>
+        <div class="drop-indicator" aria-hidden="true">松开鼠标，将图片加入当前账号的头像库</div>
+      </section>
+
+      <footer class="library-footer">
+        <p>图片按文件名供 AI 选择，建议使用“开心”“晚安”等有含义的名称。</p>
+        <details><summary>头像库目录</summary><code id="library-path">—</code></details>
+      </footer>
+    </main>
+
+    <template id="avatar-template">
+      <article class="avatar-card">
+        <button class="image-button" type="button">
+          <img alt="" />
+          <span class="image-placeholder">加载预览…</span>
+          <span class="selection-mark" hidden>上次设置</span>
+        </button>
+        <div class="card-content">
+          <h3 class="file-name"></h3>
+          <div class="card-meta"><span class="file-size"></span><div><button class="text-button rename-button" type="button">改名</button><button class="text-button delete-button" type="button">删除</button></div></div>
+          <button class="button apply-button" type="button">设为头像</button>
+        </div>
+      </article>
+    </template>
+
+    <dialog id="preview-dialog" class="preview-dialog">
+      <div class="preview-heading"><h2 id="preview-title">图片预览</h2><button class="icon-button close-preview" aria-label="关闭图片预览" type="button">×</button></div>
+      <p id="preview-loading" class="preview-loading">正在加载大图…</p>
+      <img id="preview-image" alt="" hidden />
+    </dialog>
+
+    <dialog id="rename-dialog">
+      <form id="rename-form">
+        <h2 class="text-h3 pa-4 pb-0 pl-6 dialog-title">重命名头像</h2>
+        <div class="dialog-body"><label for="rename-input">图片名称</label><div class="rename-field"><input id="rename-input" autocomplete="off" required /><span id="rename-suffix"></span></div><p id="rename-error" class="field-error" role="alert" hidden></p></div>
+        <div class="dialog-actions"><button class="button subtle cancel-rename" type="button">取消</button><button id="rename-submit" class="button tonal" type="submit">保存名称</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="delete-dialog">
+      <form id="delete-form">
+        <h2 class="text-h3 pa-4 pb-0 pl-6 dialog-title">删除这张头像？</h2>
+        <div class="dialog-body"><p id="delete-description"></p><p class="muted">仅删除图库文件，QQ 当前头像保持不变。</p><p id="delete-error" class="field-error" role="alert" hidden></p></div>
+        <div class="dialog-actions"><button class="button subtle cancel-delete" type="button">取消</button><button id="delete-submit" class="button danger-tonal" type="submit">确认删除</button></div>
+      </form>
+    </dialog>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

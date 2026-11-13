@@ -2,17 +2,19 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+.taste-skill/
+AGENTS.md
+需求文档.md
+ROADMAP.md
 .coverage
 htmlcov/
 .venv/
 venv/
 
-tests/
-test_*.py
-*_test.py
-
 data/
 plugin_data/
+config.local.json
+config.production.json
 *.log
 .env
 .env.*
