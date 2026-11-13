@@ -54,7 +54,7 @@
       </section>
 
       <footer class="library-footer">
-        <p>图片按文件名供 AI 选择，建议使用“开心”“晚安”等有含义的名称。</p>
+        <p>为图片添加中文说明和情绪标签，AI 会结合这些信息与对话情境选图。</p>
         <details><summary>头像库目录</summary><code id="library-path">—</code></details>
       </footer>
     </main>
@@ -68,7 +68,10 @@
         </button>
         <div class="card-content">
           <h3 class="file-name"></h3>
+          <p class="file-description" hidden></p>
+          <div class="file-tags" aria-label="情绪标签" hidden></div>
           <div class="card-meta"><span class="file-size"></span><div><button class="text-button rename-button" type="button">改名</button><button class="text-button delete-button" type="button">删除</button></div></div>
+          <button class="button subtle metadata-button" type="button">编辑说明与标签</button>
           <button class="button apply-button" type="button">设为头像</button>
         </div>
       </article>
@@ -85,6 +88,23 @@
         <h2 class="text-h3 pa-4 pb-0 pl-6 dialog-title">重命名头像</h2>
         <div class="dialog-body"><label for="rename-input">图片名称</label><div class="rename-field"><input id="rename-input" autocomplete="off" required /><span id="rename-suffix"></span></div><p id="rename-error" class="field-error" role="alert" hidden></p></div>
         <div class="dialog-actions"><button class="button subtle cancel-rename" type="button">取消</button><button id="rename-submit" class="button tonal" type="submit">保存名称</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="metadata-dialog" aria-labelledby="metadata-title">
+      <form id="metadata-form">
+        <h2 id="metadata-title" class="text-h3 pa-4 pb-0 pl-6 dialog-title">编辑说明与标签</h2>
+        <div class="dialog-body metadata-fields">
+          <p id="metadata-file" class="muted"></p>
+          <label for="description-input">中文说明</label>
+          <textarea id="description-input" rows="4" maxlength="500" placeholder="例如：微笑着挥手，适合开心地打招呼。" aria-describedby="description-hint"></textarea>
+          <p id="description-hint" class="muted field-hint">最多 500 字，可留空。</p>
+          <label for="tags-input">情绪标签</label>
+          <input id="tags-input" maxlength="256" autocomplete="off" placeholder="开心，温柔，打招呼" aria-describedby="tags-hint" />
+          <p id="tags-hint" class="muted field-hint">用逗号分隔，最多 8 个，每个最多 20 字。清空后保存可移除资料。</p>
+          <p id="metadata-error" class="field-error" role="alert" hidden></p>
+        </div>
+        <div class="dialog-actions"><button class="button subtle cancel-metadata" type="button">取消</button><button id="metadata-submit" class="button tonal" type="submit">保存资料</button></div>
       </form>
     </dialog>
 

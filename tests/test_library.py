@@ -34,6 +34,7 @@ class LibraryTests(unittest.IsolatedAsyncioTestCase):
         self.plugin = SimpleNamespace(
             accounts=self.accounts,
             state={},
+            avatar_metadata={},
             lock=asyncio.Lock(),
             put_kv_data=AsyncMock(),
             change_avatar=AsyncMock(return_value="未更换：冷却中。"),
@@ -70,7 +71,7 @@ class LibraryTests(unittest.IsolatedAsyncioTestCase):
             cookies={},
             client=None,
             query_params=QueryParams(urlencode(query or {})),
-            json=AsyncMock(return_value=payload or {}),
+            json=AsyncMock(return_value=payload if payload is not None else {}),
             form=AsyncMock(return_value=form),
         )
         with bind_request_context(PluginRequest(raw, username="local-test")):
@@ -122,6 +123,8 @@ class LibraryTests(unittest.IsolatedAsyncioTestCase):
             "file_name": "smile.png",
             "changed_at": changed_at,
         }
+        details = {"description": "开心的笑容", "tags": ["开心"]}
+        self.plugin.avatar_metadata["qq_bot_2:222"] = {"smile.png": details}
         status, _ = await self.call(
             self.view.rename,
             payload={
@@ -135,6 +138,9 @@ class LibraryTests(unittest.IsolatedAsyncioTestCase):
             self.plugin.state["qq_bot_2:222"],
             {"file_name": "happy.png", "changed_at": changed_at},
         )
+        self.assertEqual(
+            self.plugin.avatar_metadata["qq_bot_2:222"], {"happy.png": details}
+        )
         status, _ = await self.call(
             self.view.delete,
             payload={"account_key": "qq_bot_2:222", "file_name": "happy.png"},
@@ -146,8 +152,98 @@ class LibraryTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(status, 200)
         self.assertFalse(result["last_selection_exists"])
+        self.assertEqual(self.plugin.avatar_metadata.get("qq_bot_2:222", {}), {})
         self.assertGreater(result["cooldown_remaining"], 0)
         self.plugin.change_avatar.assert_not_awaited()
+
+    async def test_metadata_normalizes_isolates_and_clears(self):
+        """Save normalized details without sharing them with another account."""
+        for account in self.accounts.values():
+            (account["directory"] / "smile.png").write_bytes(self.png)
+        payload = {
+            "account_key": "qq_bot_2:222",
+            "file_name": "smile.png",
+            "description": "  温柔地打招呼。  ",
+            "tags": [" 开心 ", "温柔", "开心", ""],
+        }
+        status, result = await self.call(self.view.save_metadata, payload=payload)
+        self.assertEqual(status, 200)
+        self.assertEqual(result["description"], "温柔地打招呼。")
+        self.assertEqual(result["tags"], ["开心", "温柔"])
+        self.plugin.put_kv_data.assert_awaited_with(
+            "avatar_metadata", self.plugin.avatar_metadata
+        )
+        for key, expected in [("qq_bot_1:111", ""), ("qq_bot_2:222", "温柔地打招呼。")]:
+            _, library = await self.call(self.view.avatars, query={"account_key": key})
+            self.assertEqual(library["files"][0]["description"], expected)
+        payload.update(description="", tags=[])
+        status, _ = await self.call(self.view.save_metadata, payload=payload)
+        self.assertEqual(status, 200)
+        self.assertEqual(self.plugin.avatar_metadata.get("qq_bot_2:222", {}), {})
+
+    async def test_metadata_validation_and_failed_save_keep_existing_data(self):
+        """Reject invalid details and keep the last saved value on persistence failure."""
+        (self.accounts["qq_bot_2:222"]["directory"] / "smile.png").write_bytes(self.png)
+        payload = {"account_key": "qq_bot_2:222", "file_name": "smile.png"}
+        for invalid in [
+            {"description": 1},
+            {"description": "中" * 501},
+            {"tags": "开心"},
+            {"tags": [1]},
+            {"tags": ["长" * 21]},
+            {"tags": [str(i) for i in range(9)]},
+            {"file_name": "../smile.png"},
+            {"account_key": "missing:111"},
+        ]:
+            with self.subTest(invalid=invalid):
+                status, _ = await self.call(
+                    self.view.save_metadata, payload={**payload, **invalid}
+                )
+                self.assertEqual(status, 400)
+        status, _ = await self.call(self.view.save_metadata, payload=[])
+        self.assertEqual(status, 400)
+        status, _ = await self.call(
+            self.view.save_metadata, payload={**payload, "file_name": "missing.png"}
+        )
+        self.assertEqual(status, 404)
+        self.plugin.put_kv_data.assert_not_awaited()
+        self.plugin.put_kv_data.side_effect = RuntimeError("storage unavailable")
+        status, _ = await self.call(
+            self.view.save_metadata, payload={**payload, "description": "新的说明"}
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(self.plugin.avatar_metadata, {})
+
+    async def test_shared_folder_rename_and_delete_keep_account_details_separate(self):
+        """Migrate each account's own annotation when a shared physical file changes."""
+        directory = self.accounts["qq_bot_2:222"]["directory"]
+        self.accounts["qq_bot_1:111"]["directory"] = directory
+        (directory / "smile.png").write_bytes(self.png)
+        for key, description in [("qq_bot_1:111", "开心"), ("qq_bot_2:222", "温柔")]:
+            self.plugin.avatar_metadata[key] = {
+                "smile.png": {"description": description, "tags": [description]}
+            }
+        payload = {
+            "account_key": "qq_bot_2:222",
+            "file_name": "smile.png",
+            "new_name": "happy.png",
+        }
+        status, _ = await self.call(self.view.rename, payload=payload)
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            self.plugin.avatar_metadata["qq_bot_1:111"]["happy.png"]["description"],
+            "开心",
+        )
+        self.assertEqual(
+            self.plugin.avatar_metadata["qq_bot_2:222"]["happy.png"]["description"],
+            "温柔",
+        )
+        payload["file_name"] = "happy.png"
+        status, _ = await self.call(self.view.delete, payload=payload)
+        self.assertEqual(status, 200)
+        self.assertTrue(
+            all(not details for details in self.plugin.avatar_metadata.values())
+        )
 
     async def test_apply_reports_skip_failure_and_success(self):
         """Use the real change method contract without guessing a successful result."""

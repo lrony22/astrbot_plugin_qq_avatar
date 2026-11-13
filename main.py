@@ -38,6 +38,7 @@ class QQAvatar(Star):
         self.config = config
         self.accounts = {}
         self.state = {}
+        self.avatar_metadata = {}
         self.lock = asyncio.Lock()
         self.library_view = AvatarLibraryView(self)
 
@@ -48,6 +49,7 @@ class QQAvatar(Star):
             ValueError: If an account or schedule configuration is invalid.
         """
         self.state = await self.get_kv_data("state", {}) or {}
+        self.avatar_metadata = await self.get_kv_data("avatar_metadata", {}) or {}
         manager = self.context.cron_manager
         # Remove only this plugin's orphaned jobs after an interrupted shutdown.
         await self.terminate()
@@ -227,27 +229,39 @@ class QQAvatar(Star):
 
     @filter.llm_tool(name="qq_avatar_library")
     async def avatar_library(self, event: AstrMessageEvent) -> str:
-        """查看当前 QQ 账号的头像库，供选择新头像时参考。
+        """查看当前 QQ 账号的头像库、图片中文说明和情绪标签，供选图参考。
 
         Returns:
-            可用图片的文件名、上次选择的头像及轮换设置。
+            可用图片的文件名、说明、标签、上次选择及轮换设置。
         """
         try:
             key, account = self.account_for(event)
-            files = await asyncio.to_thread(self.library_files, account)
-            return json.dumps(
-                {
-                    "account": key,
-                    "ai_enabled": account.get("ai_enabled", True),
-                    "last_selection": self.state.get(key, {}).get("file_name"),
-                    "files": list(files),
-                    "selection": account.get("selection", "random"),
-                    "cron": account.get("cron", "") or "关闭",
-                    "timezone": account.get("timezone", "Asia/Shanghai"),
-                    "cooldown_minutes": account["cooldown_minutes"],
-                },
-                ensure_ascii=False,
-            )
+            async with self.lock:
+                files = await asyncio.to_thread(self.library_files, account)
+                details = self.avatar_metadata.get(key, {})
+                return json.dumps(
+                    {
+                        "account": key,
+                        "ai_enabled": account.get("ai_enabled", True),
+                        "last_selection": self.state.get(key, {}).get("file_name"),
+                        "files": list(files),
+                        "avatars": [
+                            {
+                                "file_name": name,
+                                "description": details.get(name, {}).get(
+                                    "description", ""
+                                ),
+                                "tags": details.get(name, {}).get("tags", []),
+                            }
+                            for name in files
+                        ],
+                        "selection": account.get("selection", "random"),
+                        "cron": account.get("cron", "") or "关闭",
+                        "timezone": account.get("timezone", "Asia/Shanghai"),
+                        "cooldown_minutes": account["cooldown_minutes"],
+                    },
+                    ensure_ascii=False,
+                )
         except Exception as exc:
             return f"无法查看头像库：{exc}"
 
@@ -289,7 +303,8 @@ class QQAvatar(Star):
             request.system_prompt = (request.system_prompt or "") + (
                 "\n[QQ 头像能力] 你可以根据自身人设、心情和对话情境自主换头像，"
                 "无需等用户每次提出要求。先用 qq_avatar_library 查看当前账号头像库，"
-                "按文件名含义选择合适的图片，再用 qq_avatar_change 更换；"
+                "结合图片的中文说明、情绪标签、文件名和当前对话情境选择合适的图片，"
+                "再用 qq_avatar_change 传入完整文件名更换；未填写说明或标签时参考文件名。"
                 "合适时才更换，遵守冷却，未成功时不要声称已更换。"
             )
 

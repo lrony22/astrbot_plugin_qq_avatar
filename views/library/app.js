@@ -7,6 +7,7 @@ const fileInput = $("#file-input");
 const previewDialog = $("#preview-dialog");
 const renameDialog = $("#rename-dialog");
 const deleteDialog = $("#delete-dialog");
+const metadataDialog = $("#metadata-dialog");
 let accounts = [];
 let activeKey = "";
 let currentFiles = [];
@@ -32,7 +33,7 @@ function setBusy(value) {
   $("#upload-button").disabled = value || !activeKey || loading;
   $("#empty-upload").disabled = value || !activeKey || loading;
   $("#refresh-button").disabled = value || loading;
-  gallery.querySelectorAll(".rename-button, .delete-button").forEach((button) => {
+  gallery.querySelectorAll(".rename-button, .delete-button, .metadata-button").forEach((button) => {
     button.disabled = value;
   });
   updateCooldown();
@@ -115,12 +116,34 @@ function renderFiles(revision) {
     card.querySelector(".file-name").textContent = file.file_name;
     card.querySelector(".file-name").title = file.file_name;
     card.querySelector(".file-size").textContent = sizeLabel(file.size_bytes);
+    const description = card.querySelector(".file-description");
+    description.textContent = file.description || "";
+    description.title = file.description || "";
+    description.hidden = !file.description;
+    const tags = card.querySelector(".file-tags");
+    for (const tag of file.tags || []) {
+      const label = document.createElement("span");
+      label.className = "emotion-tag";
+      label.textContent = tag;
+      tags.append(label);
+    }
+    tags.hidden = !tags.childElementCount;
     const item = { account_key: key, file_name: file.file_name };
     const imageButton = card.querySelector(".image-button");
     imageButton.setAttribute("aria-label", `预览 ${file.file_name}`);
     imageButton.addEventListener("click", () => showPreview(item));
     card.querySelector(".rename-button").addEventListener("click", () => openRename(item));
     card.querySelector(".delete-button").addEventListener("click", () => openDelete(item));
+    card.querySelector(".metadata-button").addEventListener("click", () => {
+      if (busy) return;
+      dialogItem = item;
+      $("#metadata-file").textContent = file.file_name;
+      $("#description-input").value = file.description || "";
+      $("#tags-input").value = (file.tags || []).join("，");
+      $("#metadata-error").hidden = true;
+      metadataDialog.showModal();
+      $("#description-input").focus();
+    });
     const applyButton = card.querySelector(".apply-button");
     applyButton.dataset.file = file.file_name;
     applyButton.addEventListener("click", () => applyAvatar(item));
@@ -287,6 +310,35 @@ async function applyAvatar(item) {
     setBusy(false);
   }
 }
+
+$("#metadata-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (busy) return;
+  const item = { ...dialogItem };
+  const description = $("#description-input").value;
+  const tags = $("#tags-input").value.split(/[,，、\n]+/).map((tag) => tag.trim()).filter(Boolean);
+  const controls = $("#metadata-form").querySelectorAll("input, textarea, button");
+  controls.forEach((control) => { control.disabled = true; });
+  $("#metadata-error").hidden = true;
+  setBusy(true);
+  try {
+    await bridge.apiPost("metadata", { ...item, description, tags });
+    metadataDialog.close();
+    notify(`已保存 ${item.file_name} 的说明与标签。`, "success");
+    await loadLibrary();
+  } catch (error) {
+    $("#metadata-error").textContent = error.message;
+    $("#metadata-error").hidden = false;
+  } finally {
+    controls.forEach((control) => { control.disabled = false; });
+    setBusy(false);
+  }
+});
+
+metadataDialog.addEventListener("cancel", (event) => {
+  if (busy) event.preventDefault();
+});
+$(".cancel-metadata").addEventListener("click", () => metadataDialog.close());
 
 $("#rename-form").addEventListener("submit", async (event) => {
   event.preventDefault();

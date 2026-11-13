@@ -40,6 +40,7 @@ class AvatarLibraryView:
             ("avatars", self.avatars, "GET"),
             ("image", self.image, "GET"),
             ("upload/<account_key>", self.upload, "POST"),
+            ("metadata", self.save_metadata, "POST"),
             ("rename", self.rename, "POST"),
             ("delete", self.delete, "POST"),
             ("apply", self.apply, "POST"),
@@ -137,6 +138,7 @@ class AvatarLibraryView:
             account = self.account(key)
             async with self.plugin.lock:
                 files = await asyncio.to_thread(self.plugin.library_files, account)
+                details = self.plugin.avatar_metadata.get(key, {})
                 previous = self.plugin.state.get(key, {})
                 remaining = max(
                     0,
@@ -149,7 +151,14 @@ class AvatarLibraryView:
                 return json_response(
                     {
                         "files": [
-                            {"file_name": name, "size_bytes": path.stat().st_size}
+                            {
+                                "file_name": name,
+                                "size_bytes": path.stat().st_size,
+                                "description": details.get(name, {}).get(
+                                    "description", ""
+                                ),
+                                "tags": details.get(name, {}).get("tags", []),
+                            }
                             for name, path in files.items()
                         ],
                         "last_selection": previous.get("file_name"),
@@ -231,6 +240,60 @@ class AvatarLibraryView:
             if temporary is not None:
                 temporary.unlink(missing_ok=True)
 
+    async def save_metadata(self):
+        """Validate and persist one account's image description and emotion tags.
+
+        Returns:
+            Normalized image details, or an input or persistence error.
+        """
+        try:
+            payload = await request.json(default={})
+            if not isinstance(payload, dict):
+                return error_response("请求内容必须为 JSON 对象。")
+            key = payload.get("account_key", "")
+            path = self.image_path(key, payload.get("file_name", ""))
+            description = payload.get("description", "")
+            tags = payload.get("tags", [])
+            if not isinstance(description, str):
+                raise ValueError("中文说明必须为文本。")
+            description = description.strip()
+            if len(description) > 500:
+                raise ValueError("中文说明不能超过 500 字。")
+            if not isinstance(tags, list):
+                raise ValueError("情绪标签必须为文本列表。")
+            normalized = []
+            for tag in tags:
+                if not isinstance(tag, str):
+                    raise ValueError("每个情绪标签必须为文本。")
+                tag = tag.strip()
+                if len(tag) > 20:
+                    raise ValueError("每个情绪标签不能超过 20 字。")
+                if tag and tag not in normalized:
+                    normalized.append(tag)
+            if len(normalized) > 8:
+                raise ValueError("每张图片最多设置 8 个情绪标签。")
+            details = {"description": description, "tags": normalized}
+            async with self.plugin.lock:
+                if not path.is_file():
+                    return error_response(
+                        "图片已不存在，请刷新头像库。", status_code=404
+                    )
+                updated = dict(self.plugin.avatar_metadata)
+                account_details = dict(updated.get(key, {}))
+                if description or normalized:
+                    account_details[path.name] = details
+                else:
+                    account_details.pop(path.name, None)
+                if account_details:
+                    updated[key] = account_details
+                else:
+                    updated.pop(key, None)
+                await self.plugin.put_kv_data("avatar_metadata", updated)
+                self.plugin.avatar_metadata = updated
+            return json_response({"file_name": path.name, **details})
+        except Exception as exc:
+            return error_response(f"保存头像资料失败：{exc}")
+
     async def rename(self):
         """Rename an image and retain the last-selection cooldown.
 
@@ -260,13 +323,20 @@ class AvatarLibraryView:
                 old.rename(new)
                 # Explicitly shared folders refer to the same renamed library item.
                 for account_key, account in self.plugin.accounts.items():
+                    if account["directory"] != old.parent:
+                        continue
                     previous = self.plugin.state.get(account_key, {})
-                    if (
-                        account["directory"] == old.parent
-                        and previous.get("file_name") == old.name
-                    ):
+                    if previous.get("file_name") == old.name:
                         previous["file_name"] = new.name
+                    details = self.plugin.avatar_metadata.get(account_key, {})
+                    item = details.pop(old.name, None)
+                    details.pop(new.name, None)
+                    if item is not None:
+                        details[new.name] = item
                 await self.plugin.put_kv_data("state", self.plugin.state)
+                await self.plugin.put_kv_data(
+                    "avatar_metadata", self.plugin.avatar_metadata
+                )
             return json_response({"file_name": new.name})
         except (ValueError, OSError) as exc:
             return error_response(str(exc))
@@ -290,6 +360,15 @@ class AvatarLibraryView:
                         "图片已不存在，请刷新头像库。", status_code=404
                     )
                 path.unlink()
+                for account_key, account in self.plugin.accounts.items():
+                    if account["directory"] == path.parent:
+                        details = self.plugin.avatar_metadata.get(account_key, {})
+                        details.pop(path.name, None)
+                        if not details:
+                            self.plugin.avatar_metadata.pop(account_key, None)
+                await self.plugin.put_kv_data(
+                    "avatar_metadata", self.plugin.avatar_metadata
+                )
             return json_response({"file_name": path.name})
         except (ValueError, OSError) as exc:
             return error_response(str(exc))

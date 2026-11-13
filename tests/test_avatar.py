@@ -50,8 +50,17 @@ class AvatarTests(unittest.IsolatedAsyncioTestCase):
             )
         self.context.get_platform_inst.side_effect = platforms.get
         self.plugin = QQAvatar(self.context, {"accounts": accounts})
-        self.plugin.get_kv_data = AsyncMock(return_value={})
-        self.plugin.put_kv_data = AsyncMock()
+        self.persisted = {}
+        self.plugin.get_kv_data = AsyncMock(
+            side_effect=lambda key, default: copy.deepcopy(
+                self.persisted.get(key, default)
+            )
+        )
+        self.plugin.put_kv_data = AsyncMock(
+            side_effect=lambda key, value: self.persisted.update(
+                {key: copy.deepcopy(value)}
+            )
+        )
         await self.plugin.initialize()
 
     async def test_event_routes_only_to_its_own_account(self):
@@ -85,7 +94,7 @@ class AvatarTests(unittest.IsolatedAsyncioTestCase):
         await self.plugin.change_avatar(second)
         self.assertEqual(self.plugin.state[second]["file_name"], "happy.png")
         saved = copy.deepcopy(self.plugin.state)
-        self.plugin.get_kv_data.return_value = saved
+        self.persisted["state"] = saved
         await self.plugin.initialize()
         self.assertIn("冷却中", await self.plugin.change_avatar(first))
         self.plugin.accounts[first]["cooldown_minutes"] = 0
@@ -123,6 +132,35 @@ class AvatarTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             json.loads(await self.plugin.avatar_library(event))["files"],
             ["happy.png", "sleep.jpg"],
+        )
+
+    async def test_metadata_restores_and_reaches_only_the_current_account_tool(self):
+        """Preserve details across reloads and expose them alongside legacy filenames."""
+        details = {"description": "温柔地微笑，适合打招呼。", "tags": ["开心", "温柔"]}
+        await self.plugin.put_kv_data(
+            "avatar_metadata", {"qq_bot_2:222": {"happy.png": details}}
+        )
+        await self.plugin.initialize()
+        event = MagicMock()
+        event.get_platform_name.return_value = "aiocqhttp"
+        event.get_platform_id.return_value = "qq_bot_2"
+        event.get_self_id.return_value = "222"
+        result = json.loads(await self.plugin.avatar_library(event))
+        self.assertEqual(result["files"], ["happy.png", "sleep.jpg"])
+        self.assertEqual(result["avatars"][0], {"file_name": "happy.png", **details})
+        self.assertEqual(result["avatars"][1]["description"], "")
+        self.assertEqual(result["avatars"][1]["tags"], [])
+        request = SimpleNamespace(system_prompt="Existing persona")
+        await self.plugin.avatar_hint(event, request)
+        self.assertIn("中文说明、情绪标签", request.system_prompt)
+        event.get_platform_id.return_value = "qq_bot_1"
+        event.get_self_id.return_value = "111"
+        result = json.loads(await self.plugin.avatar_library(event))
+        self.assertTrue(
+            all(
+                not item["description"] and not item["tags"]
+                for item in result["avatars"]
+            )
         )
 
     async def test_native_cron_callback_and_owned_job_cleanup(self):
